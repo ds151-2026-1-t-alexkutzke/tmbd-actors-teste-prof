@@ -12,6 +12,7 @@ export default function RootLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'TMDB Filmes' }} />
       <Stack.Screen name="movie/[id]" options={{ title: 'Detalhes do Filme' }} />
+      <Stack.Screen name="actor/[id]" options={{ title: 'Perfil do Ator' }} />
     </Stack>
   );
 }
