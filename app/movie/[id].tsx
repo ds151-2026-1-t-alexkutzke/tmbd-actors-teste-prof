@@ -1,6 +1,6 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, Link } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, Image, StyleSheet, ActivityIndicator, ScrollView, FlatList, Pressable } from 'react-native';
 import { api } from '../../src/api/tmdb';
 
 interface MovieDetails {
@@ -11,26 +11,39 @@ interface MovieDetails {
   runtime: number;
 }
 
+interface Actor {
+  id: number;
+  name: string;
+  profile_path: string | null;
+}
+
 export default function MovieDetailsScreen() {
-  // Captura o parâmetro '[id]' do nome do arquivo
   const { id } = useLocalSearchParams();
   const [movie, setMovie] = useState<MovieDetails | null>(null);
+  const [cast, setCast] = useState<Actor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchMovieDetails = async () => {
+    const fetchMovieData = async () => {
       try {
-        const response = await api.get(`/movie/${id}`);
-        setMovie(response.data);
+        // Busca os detalhes e os créditos (elenco) simultaneamente
+        const [movieRes, creditsRes] = await Promise.all([
+          api.get(`/movie/${id}`),
+          api.get(`/movie/${id}/credits`)
+        ]);
+        
+        setMovie(movieRes.data);
+        // Limita a lista de atores para os 5 primeiros
+        setCast(creditsRes.data.cast.slice(0, 5));
       } catch (error) {
-        console.error('Erro ao buscar detalhes:', error);
+        console.error('Erro ao buscar detalhes do filme:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchMovieDetails();
-  }, [id]); // O hook é re-executado caso o ID mude
+    fetchMovieData();
+  }, [id]);
 
   if (isLoading) {
     return (
@@ -69,6 +82,35 @@ export default function MovieDetailsScreen() {
         <Text style={styles.overview}>
           {movie.overview || 'Sinopse não disponível para este filme.'}
         </Text>
+
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Elenco Principal</Text>
+        <FlatList
+          data={cast}
+          horizontal
+          keyExtractor={(item) => item.id.toString()}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            // Adicionamos o "as any" para o TypeScript aceitar a nova rota dinâmica
+            <Link href={`/actor/${item.id}` as any} asChild>
+              <Pressable style={styles.actorCard}>
+                {item.profile_path ? (
+                  <Image
+                    source={{ uri: `https://image.tmdb.org/t/p/w200${item.profile_path}` }}
+                    style={styles.actorImage}
+                  />
+                ) : (
+                  <View style={styles.actorImagePlaceholder}>
+                    <Text style={styles.placeholderText}>?</Text>
+                  </View>
+                )}
+                {/* Removemos o textAlign daqui, pois agora ele está no styles.actorName */}
+                <Text style={styles.actorName} numberOfLines={2}>
+                  {item.name}
+                </Text>
+              </Pressable>
+            </Link>
+          )}
+        />
       </View>
     </ScrollView>
   );
@@ -85,4 +127,9 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
   overview: { color: '#D1D5DB', fontSize: 16, lineHeight: 24 },
   errorText: { color: '#FFFFFF', fontSize: 18 },
+  actorCard: { width: 90, marginRight: 16, alignItems: 'center' },
+  actorImage: { width: 70, height: 70, borderRadius: 35, marginBottom: 8 },
+  actorImagePlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  placeholderText: { color: '#9CA3AF', fontSize: 24 },
+  actorName: { color: '#D1D5DB', fontSize: 12, textAlign: 'center' },
 });
